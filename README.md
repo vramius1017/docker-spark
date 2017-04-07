@@ -1,0 +1,1 @@
+A spark base image, support spark sql.
