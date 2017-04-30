@@ -20,6 +20,3 @@ RUN apt-get update \
     && cp $SPARK_HOME/conf/spark-defaults.conf.template $SPARK_HOME/conf/spark-defaults.conf \
     && echo "spark.driver.extraClassPath $ORACLE_CLIENT_HOME/lib/ojdbc6.jar" >> $SPARK_HOME/conf/spark-defaults.conf \
     && echo "spark.executor.extraClassPath $ORACLE_CLIENT_HOME/lib/ojdbc6.jar" >> $SPARK_HOME/conf/spark-defaults.conf
-
-VOLUME ["/root"]
-WORKDIR /root
