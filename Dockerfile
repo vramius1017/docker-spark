@@ -1,22 +1,51 @@
-FROM gettyimages/spark:latest
-MAINTAINER zzswang@gmail.com
+FROM alpine:3.5
+LABEL maintainer "prajnamort@gmail.com"
 
-ENV LD_LIBRARY_PATH $LD_LIBRARY_PATH:/usr/lib/oracle/11.2/client64/lib
-ENV ORACLE_CLIENT_VERSION 11.2
-ENV ORACLE_CLIENT_HOME /usr/lib/oracle/$ORACLE_CLIENT_VERSION/client64
-ENV PYSPARK_PYTHON python3
+# openjdk
+RUN apk add --no-cache openjdk8-jre
 
-RUN apt-get update \
-    && apt-get install -y alien libaio1 supervisor \
-    && mkdir -p /var/log/supervisor \
-    && curl -o /tmp/oracle_rpms.tar.gz http://olywm419i.bkt.clouddn.com/oracle_rpms.tar.gz \
-    && tar xvf /tmp/oracle_rpms.tar.gz -C /tmp \
-    && alien -i /tmp/oracle_rpms/oracle-instantclient11.2-basic-11.2.0.4.0-1.x86_64.rpm \
-    && alien -i /tmp/oracle_rpms/oracle-instantclient11.2-devel-11.2.0.4.0-1.x86_64.rpm \
-    && alien -i /tmp/oracle_rpms/oracle-instantclient11.2-jdbc-11.2.0.4.0-1.x86_64.rpm \
-    && alien -i /tmp/oracle_rpms/oracle-instantclient11.2-sqlplus-11.2.0.4.0-1.x86_64.rpm \
-    && rm /tmp/oracle_rpms -rf \
-# Spark Conf
-    && cp $SPARK_HOME/conf/spark-defaults.conf.template $SPARK_HOME/conf/spark-defaults.conf \
-    && echo "spark.driver.extraClassPath $ORACLE_CLIENT_HOME/lib/ojdbc6.jar" >> $SPARK_HOME/conf/spark-defaults.conf \
-    && echo "spark.executor.extraClassPath $ORACLE_CLIENT_HOME/lib/ojdbc6.jar" >> $SPARK_HOME/conf/spark-defaults.conf
+# python3, pip3
+RUN apk add --no-cache python3
+
+# psycopg2 (pip3)
+RUN apk add --no-cache postgresql-dev \
+    && apk add --no-cache --virtual .psycopg2-deps gcc libc-dev python3-dev \
+    && pip3 install psycopg2==2.7.1 \
+    && apk del --no-cache .psycopg2-deps
+
+# nginx
+RUN apk add --no-cache nginx \
+    && rm /etc/nginx/conf.d/default.conf \
+    && mkdir /run/nginx
+
+# supervisor
+RUN apk add --no-cache supervisor \
+    && mkdir -p /var/log/supervisor
+
+# oracle instant client
+RUN apk add --no-cache --virtual .curl-deps curl \
+    && curl -o /tmp/instantclient_11_2.zip http://olywm419i.bkt.clouddn.com/instantclient_11_2.zip \
+    && apk del --no-cache .curl-deps \
+    && unzip /tmp/instantclient_11_2.zip -d /usr/lib \
+    && rm /tmp/instantclient_11_2.zip \
+    && ln -s /usr/lib/instantclient_11_2/libclntsh.so.11.1 /usr/lib/instantclient_11_2/libclntsh.so \
+    && ln -s /usr/lib/instantclient_11_2/libocci.so.11.1 /usr/lib/instantclient_11_2/libocci.so \
+    && apk add --no-cache libaio
+ENV LD_LIBRARY_PATH="/usr/lib/instantclient_11_2" \
+    PATH="$PATH:/usr/lib/instantclient_11_2" \
+    ORACLE_BASE="/usr/lib/instantclient_11_2" \
+    ORACLE_HOME="/usr/lib/instantclient_11_2"
+
+# spark
+RUN apk add --no-cache bash \
+    && apk add --no-cache --virtual .curl-deps curl \
+    && curl -o spark-2.1.0-bin-hadoop2.7.tgz https://d3kbcqa49mib13.cloudfront.net/spark-2.1.0-bin-hadoop2.7.tgz \
+    && apk del --no-cache .curl-deps \
+    && tar xf spark-2.1.0-bin-hadoop2.7.tgz \
+    && rm spark-2.1.0-bin-hadoop2.7.tgz \
+    && mv spark-2.1.0-bin-hadoop2.7 /usr/spark-2.1.0 \
+    && cp /usr/spark-2.1.0/conf/spark-defaults.conf.template /usr/spark-2.1.0/conf/spark-defaults.conf \
+    && echo "spark.driver.extraClassPath $ORACLE_HOME/ojdbc6.jar" >> /usr/spark-2.1.0/conf/spark-defaults.conf \
+    && echo "spark.executor.extraClassPath $ORACLE_HOME/ojdbc6.jar" >> /usr/spark-2.1.0/conf/spark-defaults.conf
+ENV SPARK_HOME="/usr/spark-2.1.0" \
+    PYSPARK_PYTHON=python3
